@@ -9,10 +9,17 @@ Save to: data/input.txt  (gitignored — regenerable)
 
 from __future__ import annotations
 
+import os
+import urllib.request
+
+URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+DEST = "data/input.txt"
+
 
 def main() -> None:
-    # TODO(day1): urllib.request.urlretrieve(URL, "data/input.txt"), make the dir if needed.
-    raise NotImplementedError
+    os.makedirs("data", exist_ok=True)
+    urllib.request.urlretrieve(URL, DEST)
+    print(f"downloaded {DEST} ({os.path.getsize(DEST)} bytes)")
 
 
 if __name__ == "__main__":
