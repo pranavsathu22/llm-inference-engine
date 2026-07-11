@@ -1,0 +1,22 @@
+# venv
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# data + checkpoints (regenerable, big)
+data/*.txt
+*.pt
+*.ckpt
+
+# plots are committed; scratch isn't
+scratch/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
