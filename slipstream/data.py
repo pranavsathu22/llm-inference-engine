@@ -23,7 +23,6 @@ def train_val_split(data: torch.Tensor, frac: float = 0.9) -> tuple[torch.Tensor
     # TODO(day1)
     n = int(len(data) * frac)
     return (data[:n], data[n:])
-    raise NotImplementedError
 
 
 def get_batch(
@@ -37,9 +36,15 @@ def get_batch(
     Pick batch_size random start positions; each row is a window of length block_size.
     """
     # TODO(day1)
+    indices = torch.randint(0, len(data) - block_size, (batch_size,))
+    x = []
+    y = []
 
-
+    for idx in indices:
+        x.append(data[idx: idx + block_size])
+        y.append(data[idx + 1: idx + block_size + 1])
     
+    x = torch.stack(x).to(device)
+    y = torch.stack(y).to(device)
 
-
-    raise NotImplementedError
+    return (x, y)
