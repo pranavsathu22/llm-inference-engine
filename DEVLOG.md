@@ -58,3 +58,25 @@ Template:
   end. And: torch 2.13.0 ships cp314 wheels already -- pip install just worked,
   no downgrade needed. Should have tried the install before assuming it'd fail.
 - Still fuzzy on: nothing blocking -- ready for Day 2 (single attention head).
+
+## Day 2 — attention deep dive (no code yet)  (2026-07-12, ~1h)
+- Built: no code today -- went deep on the *why* behind Head instead of writing it
+  yet. Worked through why `q @ k.transpose(-2,-1)` is needed (matmul contracts the
+  inner dimension, so k has to be reshaped to (head_size, T) for the dot products
+  to land on head_size and produce a (T,T) score grid). Traced a full toy example
+  by hand: T=3, head_size=2, real numbers for Q/K/V through scores -> scale ->
+  causal mask -> softmax -> weighted sum -> output, to see concretely how position
+  0's output collapses to just v1 (causal) while position 2 blends all three v's.
+- Broke / confused me: couldn't visualize what the (T,T) output actually
+  represented or why transpose was necessary -- was just pattern-matching the
+  formula without a mental model.
+- Figured out: q@k.T is literally "every query dotted with every key," which is
+  why the shapes have to align on head_size. Also worked out self-attention vs
+  cross-attention: self-attention (what GPT uses) has Q/K/V all from the same
+  sequence and a causal mask; encoder-decoder cross-attention has Q from the
+  decoder and K/V from a separate encoder output, so the score matrix is
+  (T_tgt, T_src) instead of square, and isn't masked. ChatGPT/GPT/Llama are all
+  decoder-only -- no encoder, no cross-attention, just this same causal
+  self-attention stacked many times at scale.
+- Still fuzzy on: nothing conceptually -- next session is translating this into
+  actual Head.__init__ / Head.forward code.
