@@ -37,13 +37,34 @@ class Head(nn.Module):
         super().__init__()
         # TODO(day2): key/query/value Linear(n_embd, head_size, bias=False);
         #             register_buffer("tril", torch.tril(ones(block_size, block_size)))
-        raise NotImplementedError
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.head_size = head_size
+        
+        self.register_buffer("mask", torch.tril(torch.ones(block_size, block_size)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, T, n_embd) -> out: (B, T, head_size)
         # scores = q @ k.transpose(-2,-1) / sqrt(head_size); mask future; softmax; @ v
         # TODO(day2)
-        raise NotImplementedError
+        k = self.key(x)
+        q = self.query(x)
+        v = self.value(x)
+
+        # allows for inner two dimensions to match and to compute dot product
+        scores = q @ k.transpose(-2, -1)
+        scores = scores / (self.head_size ** 0.5)
+
+        #multiply by mask to hide fture tokens
+        T = q.shape[1]
+        causal_mask = self.mask[:T, :T]
+        scores = scores.masked_fill(causal_mask == 0, float('-inf'))
+
+        attn = torch.softmax(scores, dim=2)
+        out = attn @ v
+
+        return out
 
 
 class MultiHeadAttention(nn.Module):
