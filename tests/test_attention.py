@@ -1,4 +1,4 @@
-"""Day 2 — tests for a single attention Head.
+"""Day 2/3 — tests for a single attention Head and MultiHeadAttention.
 
 Two things worth checking: the shape contract, and the thing that actually matters --
 causal masking. A shape check alone can't catch a broken mask (wrong shapes still come
@@ -8,7 +8,7 @@ anything at position > i.
 
 import torch
 
-from slipstream.model import Head
+from slipstream.model import Head, MultiHeadAttention
 
 
 def test_head_output_shape():
@@ -35,4 +35,29 @@ def test_head_is_causal():
     # every position except the edited one must be unaffected
     assert torch.allclose(out_before[:, :7, :], out_after[:, :7, :], atol=1e-5)
     # sanity: the edited position's own output SHOULD differ (otherwise the test is vacuous)
+    assert not torch.allclose(out_before[:, 7, :], out_after[:, 7, :], atol=1e-5)
+
+
+def test_mha_output_shape():
+    mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
+    x = torch.randn(2, 8, 32)
+    out = mha(x)
+    assert out.shape == (2, 8, 32)     # (B, T, n_embd) -- same shape as input
+
+
+def test_mha_is_causal():
+    """Same causality guarantee as Head, but through all heads + the output projection."""
+    torch.manual_seed(0)
+    mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0).eval()
+
+    x = torch.randn(1, 8, 32)
+    with torch.no_grad():
+        out_before = mha(x)
+
+    x_edited = x.clone()
+    x_edited[:, 7, :] = 999.0
+    with torch.no_grad():
+        out_after = mha(x_edited)
+
+    assert torch.allclose(out_before[:, :7, :], out_after[:, :7, :], atol=1e-5)
     assert not torch.allclose(out_before[:, 7, :], out_after[:, 7, :], atol=1e-5)

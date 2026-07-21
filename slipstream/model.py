@@ -63,7 +63,7 @@ class Head(nn.Module):
 
         attn = torch.softmax(scores, dim=2)
         out = attn @ v
-
+        print(out.shape)
         return out
 
 
@@ -73,13 +73,19 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float) -> None:
         super().__init__()
         # TODO(day3): ModuleList of Head(head_size = n_embd // n_head); output proj Linear(n_embd, n_embd)
-        raise NotImplementedError
+        self.heads = nn.ModuleList([Head(n_embd, n_embd // n_head, block_size, dropout) for i in range(n_head)])
+        self.out_proj = nn.Linear(n_embd, n_embd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # concat head outputs on the channel dim, then project. (B,T,C) -> (B,T,C)
         # TODO(day3)
-        raise NotImplementedError
+        outputs = []
 
+        for head in self.heads:
+            outputs.append(head(x))
+        
+        out = torch.cat(outputs, dim=2)
+        return self.out_proj(out)
 
 class FeedForward(nn.Module):
     """Day 4 — position-wise MLP: Linear -> GELU/ReLU -> Linear, usually 4x inner width."""
@@ -132,3 +138,9 @@ class GPT(nn.Module):
         # idx: (B, T) -> logits: (B, T, vocab_size); loss: scalar cross-entropy or None
         # TODO(day5)
         raise NotImplementedError
+
+if __name__ == "__main__":
+    mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
+    x = torch.randn(2, 8, 32)
+    out = mha(x)
+    print(out.shape)

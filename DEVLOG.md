@@ -1,15 +1,5 @@
 # Devlog
 
-3–5 honest lines a day. What I built, what broke, how I figured it out. This is the
-comprehension check (if I can't write it, I didn't understand it) and the interview
-prep. Keep the confusion in — the debugging *is* the record of real work.
-
-## Day 0 — scaffold  (2026-07-10)
-- Built: repo skeleton, empty stubs, this log.
-- Broke / confused me: —
-- Figured out: —
-- Still fuzzy on: —
-
 ## Day 1 — tokenizer + data loading  (2026-07-11, ~1h)
 -imported the data from tiny shakespeare
 -had an issue where I was return a list of characters instead of a joined string
@@ -27,3 +17,7 @@ prep. Keep the confusion in — the debugging *is* the record of real work.
 - Finally figured what the (T, T) tensor actuall meant
 - Explored cross attention and its differences
 
+# Day 3
+  - had an issue with torch.cat, wasn't using the right dimensions
+  - was calling each head.forward(), but that isn't consistent with how nn.module works
+  - learned why there needs to be projection layer after concatening the output of the different heads
