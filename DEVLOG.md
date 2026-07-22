@@ -21,3 +21,8 @@
   - had an issue with torch.cat, wasn't using the right dimensions
   - was calling each head.forward(), but that isn't consistent with how nn.module works
   - learned why there needs to be projection layer after concatening the output of the different heads
+
+# Day 4 - 7/21/2026
+  - took some time to understand feedforward networks, will actually code tmrw
+  - learned the intution behind having multiple passes for attention
+  
