@@ -63,9 +63,7 @@ class Head(nn.Module):
 
         attn = torch.softmax(scores, dim=2)
         out = attn @ v
-        print(out.shape)
         return out
-
 
 class MultiHeadAttention(nn.Module):
     """Day 3 — n_head heads in parallel, concatenated then projected back to n_embd."""
@@ -92,13 +90,15 @@ class FeedForward(nn.Module):
 
     def __init__(self, n_embd: int, dropout: float) -> None:
         super().__init__()
-        # TODO(day4)
-        raise NotImplementedError
+        self.sequential = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO(day4)
-        raise NotImplementedError
-
+        out = self.sequential(x)
+        return out
 
 class Block(nn.Module):
     """Day 4 — a transformer block with PRE-norm residuals:
@@ -107,16 +107,18 @@ class Block(nn.Module):
     Pre-norm (LN before the sublayer) trains far more stably than post-norm — try both
     and watch the loss if you want to feel why.
     """
-
     def __init__(self, cfg: GPTConfig) -> None:
         super().__init__()
-        # TODO(day4)
-        raise NotImplementedError
+        self.gptConfig = cfg
+        self.ff = FeedForward(self.gptConfig.n_embd, self.gptConfig.dropout)
+        self.attn = MultiHeadAttention(self.gptConfig.n_embd, self.gptConfig.n_head, self.gptConfig.block_size, self.gptConfig.dropout)
+        self.ln1 = nn.LayerNorm(self.gptConfig.n_embd)
+        self.ln2 = nn.LayerNorm(self.gptConfig.n_embd)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # TODO(day4)
-        raise NotImplementedError
-
+        x = x + self.attn(self.ln1(x))
+        x = x + self.ff(self.ln2(x))
+        return x
 
 class GPT(nn.Module):
     """Day 5 — the whole model.
