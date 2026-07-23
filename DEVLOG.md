@@ -8,7 +8,7 @@
 - Loaded the tokens from the text and mapped the targets (y) by shifting one
 - Ran into errors with pytorch dimensions, learned the specifics pf torch.stack 
   along each dimension
-- stack needs N *equal-shaped* units to line up along a new axis
+- stack needs N equal-shaped units to line up along a new axis
 
 ## Day 2 — attention deep dive (no code yet)  (2026-07-12, ~1h)
 - Walked through the self-attention mechanism by hand to see how the dimensions 
@@ -25,4 +25,6 @@
 # Day 4 - 7/21/2026
   - took some time to understand feedforward networks, will actually code tmrw
   - learned the intution behind having multiple passes for attention
-  
+  - figured out why you need Layernorm / multiple bloks
+
+

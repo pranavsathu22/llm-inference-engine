@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 @dataclass
@@ -132,14 +133,37 @@ class GPT(nn.Module):
         super().__init__()
         self.cfg = cfg
         # TODO(day5)
-        raise NotImplementedError
+        self.t_embd = nn.Embedding(cfg.vocab_size, cfg.n_embd)
+        self.pos_embd = nn.Embedding(cfg.block_size, cfg.n_embd)
+        self.stack = nn.Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
+        self.fln = nn.LayerNorm(cfg.n_embd)
+        self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size)
+        #raise NotImplementedError
 
     def forward(
         self, idx: torch.Tensor, targets: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         # idx: (B, T) -> logits: (B, T, vocab_size); loss: scalar cross-entropy or None
         # TODO(day5)
-        raise NotImplementedError
+        B, T = idx
+        tok = self.token_embd(idx)
+        positions = torch.arrange(T, device=idx.device)
+        pos = self.pos_embd(positions)
+        x = tok + pos
+
+        #run thru blocks and final layernorm
+        x = self.stack(x)
+        x = self.fln(x)
+        logits = self.lm_head(x)
+
+        #calculate loss
+        if targets:
+            flattened_logits = logits.view(B*T, self.config.vocab_size)
+            flattened_targets = targets.view(B*T)
+            loss = F.cross_entropy(flattened_logits, flattened_targets)
+        #raise NotImplementedError
+
+        return logits, loss
 
 if __name__ == "__main__":
     mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
