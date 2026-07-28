@@ -8,8 +8,8 @@ Run with: pytest -q
 
 import torch
 
-from slipstream.model import GPT, GPTConfig
-from slipstream.generate import generate_naive, generate_cached
+from llmcore.model import GPT, GPTConfig
+from llmcore.generate import generate_naive, generate_cached
 
 
 def test_cached_matches_naive_greedy():

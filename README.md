@@ -1,6 +1,6 @@
-# llm-inference-engine
+# llmcore
 
-A small, from-scratch LLM inference engine. (Importable package: `slipstream`.) A decoder-only transformer implemented
+A small, from-scratch LLM inference engine. A decoder-only transformer implemented
 in PyTorch, plus the inference stack that makes generation fast and cheap: a KV
 cache, tunable sampling, and an int8-quantized KV cache — each one measured, not
 asserted.
@@ -19,13 +19,13 @@ benchmarks every rung:
 - **Correctness** — the KV-cache path must produce *token-identical* output to the
   full-recompute path (`tests/test_cache_equiv.py`). An optimization that changes the
   answer isn't an optimization.
-- **Speed** — tokens/sec, cached vs. uncached (`slipstream/bench.py`).
+- **Speed** — tokens/sec, cached vs. uncached (`llmcore/bench.py`).
 - **Memory** — measured KV-cache bytes, fp16 vs. int8.
 
 ## Layout
 
 ```
-slipstream/
+llmcore/
   tokenizer.py   # text <-> token ids
   data.py        # corpus -> batched (x, y) tensors
   model.py       # Head -> MultiHeadAttention -> Block -> GPT

@@ -138,16 +138,27 @@ class GPT(nn.Module):
         self.stack = nn.Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
         self.fln = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size)
-        #raise NotImplementedError
+        self.lm_head.weight = self.t_embd.weight
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module: nn.Module) -> None:
+        # PyTorch's default inits (std=1 for Embedding) are far too large once the
+        # embedding table is reused as the LM head weight via tying -- rescale
+        # everything to GPT-2/nanoGPT's std=0.02 so logits start well-behaved.
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                nn.init.zeros_(module.bias)
 
     def forward(
         self, idx: torch.Tensor, targets: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         # idx: (B, T) -> logits: (B, T, vocab_size); loss: scalar cross-entropy or None
         # TODO(day5)
-        B, T = idx
-        tok = self.token_embd(idx)
-        positions = torch.arrange(T, device=idx.device)
+        B, T = idx.shape
+        tok = self.t_embd(idx)
+        positions = torch.arange(T, device=idx.device)
         pos = self.pos_embd(positions)
         x = tok + pos
 
@@ -156,9 +167,11 @@ class GPT(nn.Module):
         x = self.fln(x)
         logits = self.lm_head(x)
 
+        loss = None
+
         #calculate loss
-        if targets:
-            flattened_logits = logits.view(B*T, self.config.vocab_size)
+        if targets is not None:
+            flattened_logits = logits.view(B*T, self.cfg.vocab_size)
             flattened_targets = targets.view(B*T)
             loss = F.cross_entropy(flattened_logits, flattened_targets)
         #raise NotImplementedError

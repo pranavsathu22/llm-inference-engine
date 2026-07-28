@@ -8,7 +8,7 @@ anything at position > i.
 
 import torch
 
-from slipstream.model import Block, GPTConfig, Head, MultiHeadAttention
+from llmcore.model import Block, GPTConfig, Head, MultiHeadAttention
 
 
 def test_head_output_shape():

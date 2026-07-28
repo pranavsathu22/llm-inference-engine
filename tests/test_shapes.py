@@ -6,7 +6,7 @@ Fill these in as the corresponding modules come online; xfail/skip until then.
 
 import torch
 
-from slipstream.model import GPT, GPTConfig
+from llmcore.model import GPT, GPTConfig
 
 
 def test_gpt_output_shape():
