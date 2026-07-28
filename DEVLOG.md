@@ -27,4 +27,8 @@
   - learned the intution behind having multiple passes for attention
   - figured out why you need Layernorm / multiple bloks
 
+# Day 5
+  - wrote the forward passing logic as well as final LM_head to get raw scores for each token in vocab
+  - understood the underlying mechanism(dot product to see similarily) to determine which token is at each posiiton in the sequence
+  - Had an issue with weights initialization, so added in a custom initializer
 
