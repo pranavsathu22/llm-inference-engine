@@ -32,3 +32,8 @@
   - understood the underlying mechanism(dot product to see similarily) to determine which token is at each posiiton in the sequence
   - Had an issue with weights initialization, so added in a custom initializer
 
+# Day 6
+  - setup the training loop for the llm, pretty straightforward other than figuring out what parameters to pass in
+
+
+
