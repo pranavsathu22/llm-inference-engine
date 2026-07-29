@@ -34,6 +34,7 @@
 
 # Day 6
   - setup the training loop for the llm, pretty straightforward other than figuring out what parameters to pass in
+  - accidentally called loss.backward() before the forward pass that actually produces loss, crashed every run until I reordered it
 
 
 
