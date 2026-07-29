@@ -10,13 +10,24 @@ Day 7: train on the full corpus, track train/val loss, checkpoint, sample text.
 from __future__ import annotations
 
 import torch
+from . import data as d
 
 
 @torch.no_grad()
 def estimate_loss(model, data, block_size: int, batch_size: int, iters: int, device: str) -> float:
     """Average loss over `iters` random batches (model in eval mode)."""
     # TODO(day6)
-    raise NotImplementedError
+    model.eval()
+    avg = float(0)
+
+    for i in range(iters):
+        x, y = d.get_batch(data, block_size, batch_size, device)
+        logits, loss = model(x, targets=y)
+        avg += loss.item()
+
+    model.train()
+
+    return avg / iters
 
 
 def train(
@@ -37,4 +48,28 @@ def train(
     Consider a short LR warmup. Save a checkpoint at the end (and maybe on best val).
     """
     # TODO(day6-7)
-    raise NotImplementedError
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+
+    history = []
+
+    for step in range(steps):
+
+        x, y = d.get_batch(train_data, block_size, batch_size, device)
+
+        logits, loss = model(x, targets=y)
+
+        optimizer.zero_grad()
+
+        loss.backward()
+
+        optimizer.step()
+
+        if step % eval_every == 0:
+            train_loss = estimate_loss(model, train_data, block_size, batch_size, 10, device)
+            val_loss = estimate_loss(model, val_data, block_size, batch_size, 10, device)
+            history.append((step, train_loss, val_loss))
+            print(history[-1])
+
+    torch.save(model.state_dict(), ckpt_path)
+
+    return history

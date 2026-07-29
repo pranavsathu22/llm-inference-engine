@@ -8,7 +8,6 @@ samples random windows is enough and easier to reason about.
 from __future__ import annotations
 
 import torch
-from tokenizer import CharTokenizer
 
 
 def load_tokens(path: str, tokenizer) -> torch.Tensor:
