@@ -36,5 +36,18 @@
   - setup the training loop for the llm, pretty straightforward other than figuring out what parameters to pass in
   - accidentally called loss.backward() before the forward pass that actually produces loss, crashed every run until I reordered it
 
+# Day 7
+  - went into depth of how the decoding process works and gets appended to the generation
+  - fixed a couple of bugs
+    - softmax was missing a dimension argument 
+    - made multiple dimension errors, namely one being that I passed in the entire out tensor instead of taking one batch
+    - first output with naive generation: 
+        
+        That, I a rut! fathrair, me! ance
+        sostat exstry reeny the mut moranter hold alive
+        The cle; whaven of with it love souleence father, like,
+        I are How'd byforksings ingle with fienow somio.'
+
+        DUKE VINCENV
 
 
