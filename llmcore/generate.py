@@ -27,16 +27,24 @@ def sample_next(logits: torch.Tensor, *, temperature: float = 1.0,
     Apply temperature, then top_k and/or top_p filtering, softmax, multinomial sample.
     """
     # TODO(day9)
-    raise NotImplementedError
+    logits = logits / temperature
+    prob = torch.softmax(logits, dim=1)
+    sample = torch.multinomial(prob, num_samples=1)
 
+    return sample
 
 @torch.no_grad()
 def generate_naive(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwargs) -> torch.Tensor:
     """Day 8 baseline — NO cache. Every step re-runs the model on the whole (growing)
     sequence, cropped to block_size. Slow on purpose; it's the correctness reference."""
     # TODO(day8)
-    raise NotImplementedError
+    for i in range(max_new_tokens):
+        idx_cropped = idx[:, -model.cfg.block_size:]
+        logits, _ = model(idx_cropped)
+        next_token = sample_next(logits[:, -1, :], temperature=1.0, top_k=None, top_p=None)
+        idx = torch.cat([idx, next_token], dim=1)
 
+    return idx
 
 @torch.no_grad()
 def generate_cached(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwargs) -> torch.Tensor:
