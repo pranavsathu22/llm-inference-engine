@@ -38,9 +38,9 @@ def train(
     steps: int,
     lr: float,
     batch_size: int,
-    block_size: int,
     device: str,
     eval_every: int = 200,
+    eval_iters: int = 20,
     ckpt_path: str = "model.pt",
 ) -> list[tuple[int, float, float]]:
     """AdamW loop. Returns a history of (step, train_loss, val_loss) for the loss curve.
@@ -49,6 +49,7 @@ def train(
     """
     # TODO(day6-7)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    block_size = model.cfg.block_size
 
     history = []
 
@@ -65,8 +66,8 @@ def train(
         optimizer.step()
 
         if step % eval_every == 0:
-            train_loss = estimate_loss(model, train_data, block_size, batch_size, 10, device)
-            val_loss = estimate_loss(model, val_data, block_size, batch_size, 10, device)
+            train_loss = estimate_loss(model, train_data, block_size, batch_size, eval_iters, device)
+            val_loss = estimate_loss(model, val_data, block_size, batch_size, eval_iters, device)
             history.append((step, train_loss, val_loss))
             print(history[-1])
 
