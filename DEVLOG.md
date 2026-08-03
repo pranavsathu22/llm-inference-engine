@@ -50,4 +50,8 @@
 
         DUKE VINCENV
 
-
+# Day 8
+  - added KV caching through the entire stack
+  - calculated offset and appended new kv onto cached kv in head.forward
+  - generate_cached prefills once, then decodes one token at a time
+  - Main bug: Changing GPT.forward's return from (logits, loss) to (logits, loss, new_caches) broke 10 call sites across train.py and multiple test files 
