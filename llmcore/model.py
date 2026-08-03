@@ -45,7 +45,7 @@ class Head(nn.Module):
         
         self.register_buffer("mask", torch.tril(torch.ones(block_size, block_size)))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, past_kv = None) -> torch.Tensor:
         # x: (B, T, n_embd) -> out: (B, T, head_size)
         # scores = q @ k.transpose(-2,-1) / sqrt(head_size); mask future; softmax; @ v
         # TODO(day2)
@@ -53,18 +53,28 @@ class Head(nn.Module):
         q = self.query(x)
         v = self.value(x)
 
+        if past_kv:
+            past_k, past_v = past_kv
+            k = torch.cat([past_k, k], dim=1)
+            v = torch.cat([past_v, v], dim=1)
+
         # allows for inner two dimensions to match and to compute dot product
         scores = q @ k.transpose(-2, -1)
         scores = scores / (self.head_size ** 0.5)
 
         #multiply by mask to hide fture tokens
-        T = q.shape[1]
-        causal_mask = self.mask[:T, :T]
+        T_new = q.shape[1]
+        T_total = k.shape[1]
+
+        T_cached = k.shape[1] - q.shape[1]
+
+        causal_mask = self.mask[T_cached : T_cached + T_new, :T_total]
         scores = scores.masked_fill(causal_mask == 0, float('-inf'))
 
         attn = torch.softmax(scores, dim=2)
         out = attn @ v
-        return out
+
+        return out, (k, v)
 
 class MultiHeadAttention(nn.Module):
     """Day 3 — n_head heads in parallel, concatenated then projected back to n_embd."""
@@ -75,16 +85,20 @@ class MultiHeadAttention(nn.Module):
         self.heads = nn.ModuleList([Head(n_embd, n_embd // n_head, block_size, dropout) for i in range(n_head)])
         self.out_proj = nn.Linear(n_embd, n_embd)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, past_kv=None) -> torch.Tensor:
         # concat head outputs on the channel dim, then project. (B,T,C) -> (B,T,C)
         # TODO(day3)
         outputs = []
+        new_caches = []
 
-        for head in self.heads:
-            outputs.append(head(x))
-        
+        for i, head in enumerate(self.heads):
+            head_past = past_kv[i] if past_kv is not None else None
+            out, cache = head(x, past_kv=head_past)
+            outputs.append(out)
+            new_caches.append(cache)
+
         out = torch.cat(outputs, dim=2)
-        return self.out_proj(out)
+        return self.out_proj(out), new_caches
 
 class FeedForward(nn.Module):
     """Day 4 — position-wise MLP: Linear -> GELU/ReLU -> Linear, usually 4x inner width."""
@@ -116,10 +130,13 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(self.gptConfig.n_embd)
         self.ln2 = nn.LayerNorm(self.gptConfig.n_embd)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x))
+    def forward(self, x: torch.Tensor, past_kv=None) -> torch.Tensor:
+        attn_out, new_cache = self.attn(self.ln1(x), past_kv=past_kv)
+
+        x = x + attn_out
         x = x + self.ff(self.ln2(x))
-        return x
+
+        return x, new_cache
 
 class GPT(nn.Module):
     """Day 5 — the whole model.
@@ -152,18 +169,29 @@ class GPT(nn.Module):
                 nn.init.zeros_(module.bias)
 
     def forward(
-        self, idx: torch.Tensor, targets: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        self, idx: torch.Tensor, targets: torch.Tensor | None = None, past_kv=None
+    ) -> tuple[torch.Tensor, torch.Tensor | None, list]:
         # idx: (B, T) -> logits: (B, T, vocab_size); loss: scalar cross-entropy or None
         # TODO(day5)
         B, T = idx.shape
+
+        if past_kv is None:
+            offset = 0
+        else:
+            offset = past_kv[0][0][0].shape[1]
+
         tok = self.t_embd(idx)
-        positions = torch.arange(T, device=idx.device)
+        positions = torch.arange(offset, offset + T, device=idx.device)
         pos = self.pos_embd(positions)
         x = tok + pos
 
         #run thru blocks and final layernorm
-        x = self.stack(x)
+        new_caches = []
+        for i, block in enumerate(self.stack):
+            block_past = past_kv[i] if past_kv is not None else None
+            x, new_cache = block(x, past_kv=block_past)
+            new_caches.append(new_cache)
+
         x = self.fln(x)
         logits = self.lm_head(x)
 
@@ -174,9 +202,8 @@ class GPT(nn.Module):
             flattened_logits = logits.view(B*T, self.cfg.vocab_size)
             flattened_targets = targets.view(B*T)
             loss = F.cross_entropy(flattened_logits, flattened_targets)
-        #raise NotImplementedError
 
-        return logits, loss
+        return logits, loss, new_caches
 
 if __name__ == "__main__":
     mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
