@@ -22,7 +22,7 @@ def estimate_loss(model, data, block_size: int, batch_size: int, iters: int, dev
 
     for i in range(iters):
         x, y = d.get_batch(data, block_size, batch_size, device)
-        logits, loss = model(x, targets=y)
+        logits, loss, _ = model(x, targets=y)
         avg += loss.item()
 
     model.train()
@@ -57,7 +57,7 @@ def train(
 
         x, y = d.get_batch(train_data, block_size, batch_size, device)
 
-        logits, loss = model(x, targets=y)
+        logits, loss, _ = model(x, targets=y)
 
         optimizer.zero_grad()
 

@@ -14,7 +14,7 @@ def test_gpt_output_shape():
     cfg = GPTConfig(vocab_size=17, block_size=8, n_embd=32, n_head=4, n_layer=2)
     model = GPT(cfg)
     idx = torch.randint(0, cfg.vocab_size, (2, cfg.block_size))
-    logits, loss = model(idx)
+    logits, loss, _ = model(idx)
     assert logits.shape == (2, cfg.block_size, cfg.vocab_size)
     assert loss is None
 
@@ -24,5 +24,5 @@ def test_loss_is_scalar_with_targets():
     cfg = GPTConfig(vocab_size=17, block_size=8, n_embd=32, n_head=4, n_layer=2)
     model = GPT(cfg)
     idx = torch.randint(0, cfg.vocab_size, (2, cfg.block_size))
-    _, loss = model(idx, targets=idx)
+    _, loss, _ = model(idx, targets=idx)
     assert loss.ndim == 0

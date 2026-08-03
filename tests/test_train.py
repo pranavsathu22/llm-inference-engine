@@ -39,7 +39,7 @@ def test_train_runs_and_loss_decreases():
     model, train_data, val_data = _tiny_setup()
     history = train(
         model, train_data, val_data,
-        steps=100, lr=3e-3, batch_size=4, block_size=16, device="cpu",
+        steps=100, lr=3e-3, batch_size=4, device="cpu",
         eval_every=25, ckpt_path="tests/_scratch_ckpt.pt",
     )
     assert all(isinstance(h[1], float) and isinstance(h[2], float) for h in history)

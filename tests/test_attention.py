@@ -14,7 +14,7 @@ from llmcore.model import Block, GPTConfig, Head, MultiHeadAttention
 def test_head_output_shape():
     head = Head(n_embd=32, head_size=16, block_size=8, dropout=0.0)
     x = torch.randn(2, 8, 32)          # B=2, T=8, n_embd=32
-    out = head(x)
+    out, _ = head(x)
     assert out.shape == (2, 8, 16)     # (B, T, head_size)
 
 
@@ -25,12 +25,12 @@ def test_head_is_causal():
 
     x = torch.randn(1, 8, 32)
     with torch.no_grad():
-        out_before = head(x)
+        out_before, _ = head(x)
 
     x_edited = x.clone()
     x_edited[:, 7, :] = 999.0          # blow up the LAST position only
     with torch.no_grad():
-        out_after = head(x_edited)
+        out_after, _ = head(x_edited)
 
     # every position except the edited one must be unaffected
     assert torch.allclose(out_before[:, :7, :], out_after[:, :7, :], atol=1e-5)
@@ -41,7 +41,7 @@ def test_head_is_causal():
 def test_mha_output_shape():
     mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
     x = torch.randn(2, 8, 32)
-    out = mha(x)
+    out, _ = mha(x)
     assert out.shape == (2, 8, 32)     # (B, T, n_embd) -- same shape as input
 
 
@@ -52,12 +52,12 @@ def test_mha_is_causal():
 
     x = torch.randn(1, 8, 32)
     with torch.no_grad():
-        out_before = mha(x)
+        out_before, _ = mha(x)
 
     x_edited = x.clone()
     x_edited[:, 7, :] = 999.0
     with torch.no_grad():
-        out_after = mha(x_edited)
+        out_after, _ = mha(x_edited)
 
     assert torch.allclose(out_before[:, :7, :], out_after[:, :7, :], atol=1e-5)
     assert not torch.allclose(out_before[:, 7, :], out_after[:, 7, :], atol=1e-5)
@@ -70,14 +70,14 @@ def _small_cfg() -> GPTConfig:
 def test_block_output_shape():
     block = Block(_small_cfg())
     x = torch.randn(2, 8, 32)
-    out = block(x)
+    out, _ = block(x)
     assert out.shape == (2, 8, 32)     # (B, T, n_embd) -- same shape as input
 
 
 def test_block_has_no_nans():
     block = Block(_small_cfg())
     x = torch.randn(2, 8, 32)
-    out = block(x)
+    out, _ = block(x)
     assert not torch.isnan(out).any()
 
 
@@ -88,12 +88,12 @@ def test_block_is_causal():
 
     x = torch.randn(1, 8, 32)
     with torch.no_grad():
-        out_before = block(x)
+        out_before, _ = block(x)
 
     x_edited = x.clone()
     x_edited[:, 7, :] = 999.0
     with torch.no_grad():
-        out_after = block(x_edited)
+        out_after, _ = block(x_edited)
 
     assert torch.allclose(out_before[:, :7, :], out_after[:, :7, :], atol=1e-4)
     assert not torch.allclose(out_before[:, 7, :], out_after[:, 7, :], atol=1e-4)
