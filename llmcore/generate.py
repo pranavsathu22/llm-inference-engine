@@ -40,8 +40,8 @@ def generate_naive(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwarg
     # TODO(day8)
     for i in range(max_new_tokens):
         idx_cropped = idx[:, -model.cfg.block_size:]
-        logits, _ = model(idx_cropped)
-        next_token = sample_next(logits[:, -1, :], temperature=1.0, top_k=None, top_p=None)
+        logits, _, _ = model(idx_cropped)
+        next_token = sample_next(logits[:, -1, :], **sample_kwargs)
         idx = torch.cat([idx, next_token], dim=1)
 
     return idx
@@ -51,5 +51,15 @@ def generate_cached(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwar
     """Day 8 — with a KV cache. Prefill the prompt once to build the cache, then each
     step feeds only the newest token + the past KV. Must match generate_naive token for
     token under the same seed."""
-    # TODO(day8)
-    raise NotImplementedError
+    # prefill: run the whole prompt once, build the initial cache
+    logits, _, past_kv = model(idx, past_kv=None)
+    next_token = sample_next(logits[:, -1, :], temperature=1.0, top_k=None, top_p=None)
+    idx = torch.cat([idx, next_token], dim=1)
+
+    # decode: feed ONLY the newest token each step, reusing + growing the cache
+    for i in range(max_new_tokens - 1):
+        logits, _, past_kv = model(next_token, past_kv=past_kv)
+        next_token = sample_next(logits[:, -1, :], **sample_kwargs)
+        idx = torch.cat([idx, next_token], dim=1)
+
+    return idx
