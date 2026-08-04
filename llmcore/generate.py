@@ -26,8 +26,37 @@ def sample_next(logits: torch.Tensor, *, temperature: float = 1.0,
 
     Apply temperature, then top_k and/or top_p filtering, softmax, multinomial sample.
     """
-    # TODO(day9)
     logits = logits / temperature
+
+    if top_k is not None:
+        # kth-largest logit per row is the threshold; anything strictly below it
+        # gets excluded from sampling entirely (set to -inf, same masking trick as
+        # the causal mask -- softmax will assign it exactly 0 probability).
+        top_k_values, _ = torch.topk(logits, top_k, dim=-1)
+        kth_value = top_k_values[:, -1:]                      # (B, 1) -- keep dim for broadcasting
+        logits = logits.masked_fill(logits < kth_value, float('-inf'))
+
+    if top_p is not None:
+        # Sort descending so we can walk down probability mass in order.
+        sorted_logits, sorted_indices = torch.sort(logits, descending=True, dim=-1)
+        sorted_probs = torch.softmax(sorted_logits, dim=-1)
+        cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+        # Positions where cumulative mass has ALREADY exceeded p should be dropped --
+        # but shift right by one first so the token that CROSSES the threshold is kept
+        # (it was needed to reach p in the first place), and always keep the top-1
+        # token even if its own probability alone exceeds p.
+        sorted_indices_to_remove = cumulative_probs > top_p
+        sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
+        sorted_indices_to_remove[:, 0] = False
+
+        # The removal mask is in SORTED order; scatter it back to original vocab
+        # positions before applying it to the (unsorted) logits.
+        indices_to_remove = sorted_indices_to_remove.scatter(
+            dim=-1, index=sorted_indices, src=sorted_indices_to_remove
+        )
+        logits = logits.masked_fill(indices_to_remove, float('-inf'))
+
     prob = torch.softmax(logits, dim=1)
     sample = torch.multinomial(prob, num_samples=1)
 
@@ -53,7 +82,7 @@ def generate_cached(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwar
     token under the same seed."""
     # prefill: run the whole prompt once, build the initial cache
     logits, _, past_kv = model(idx, past_kv=None)
-    next_token = sample_next(logits[:, -1, :], temperature=1.0, top_k=None, top_p=None)
+    next_token = sample_next(logits[:, -1, :], **sample_kwargs)
     idx = torch.cat([idx, next_token], dim=1)
 
     # decode: feed ONLY the newest token each step, reusing + growing the cache
