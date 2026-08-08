@@ -55,3 +55,17 @@
   - calculated offset and appended new kv onto cached kv in head.forward
   - generate_cached prefills once, then decodes one token at a time
   - Main bug: Changing GPT.forward's return from (logits, loss) to (logits, loss, new_caches) broke 10 call sites across train.py and multiple test files 
+
+# Day 10
+  - implemented int8 affine quantization for the KV cache (quantize_int8/dequantize_int8),
+    per-token grouping (one scale/zero_point per token, reducing over head_size)
+  - had to clamp scale to a minimum (1e-8) to avoid divide-by-zero when a group's
+    values are all identical -- verified the resulting huge zero_point still
+    reconstructs exactly instead of producing NaN
+  - measured (not projected) real memory savings via tensor_bytes: only 2.0x on an
+    8-wide group, not the naive "int8 = 4x smaller" claim, because scale/zero_point
+    are stored as full float32 and that overhead is proportionally large on small groups
+  - swept group size 8 -> 2048 and confirmed the ratio follows
+    (group_size*4)/(group_size+8), approaching 4x asymptotically but never reaching it
+  - the real number for this project's actual model (head_size=32, from n_embd=128/
+    n_head=4) is ~3.2x -- the honest figure to cite later, not "4x"
