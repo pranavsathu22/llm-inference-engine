@@ -17,7 +17,6 @@ class CharTokenizer:
         vocab_size: int
     """
     def __init__(self, text: str) -> None:
-        # TODO(day1): build the sorted set of unique chars, then stoi/itos/vocab_size.
         self.chars = sorted(set(text))
         self.stoi = {}
         self.itos = {}
@@ -25,25 +24,16 @@ class CharTokenizer:
         for i, s in enumerate(self.chars):
             self.stoi[s] = i
             self.itos[i] = s
-        
-        self.vocab_size = len(self.chars)
 
-        #raise NotImplementedError
+        self.vocab_size = len(self.chars)
 
     def encode(self, s: str) -> list[int]:
         """Text -> list of token ids."""
-        # TODO(day1)
-        encoding = [self.stoi[letter] for letter in list(s)]
-        return encoding
-        #raise NotImplementedError
+        return [self.stoi[letter] for letter in s]
 
     def decode(self, ids: list[int]) -> str:
         """List of token ids -> text. Must round-trip: decode(encode(s)) == s."""
-        # TODO(day1)
-        decoding = [self.itos[idx] for idx in ids]
-
-        return "".join(decoding)
-        #raise NotImplementedError
+        return "".join(self.itos[idx] for idx in ids)
 
 if __name__ == "__main__":
     tok = CharTokenizer(open("data/input.txt").read())

@@ -36,8 +36,6 @@ class Head(nn.Module):
 
     def __init__(self, n_embd: int, head_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        # TODO(day2): key/query/value Linear(n_embd, head_size, bias=False);
-        #             register_buffer("tril", torch.tril(ones(block_size, block_size)))
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
@@ -45,10 +43,11 @@ class Head(nn.Module):
         
         self.register_buffer("mask", torch.tril(torch.ones(block_size, block_size)))
 
-    def forward(self, x: torch.Tensor, past_kv = None) -> torch.Tensor:
-        # x: (B, T, n_embd) -> out: (B, T, head_size)
+    def forward(
+        self, x: torch.Tensor, past_kv: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        # x: (B, T, n_embd) -> out: (B, T, head_size), cache: (k, v) each (B, T_total, head_size)
         # scores = q @ k.transpose(-2,-1) / sqrt(head_size); mask future; softmax; @ v
-        # TODO(day2)
         k = self.key(x)
         q = self.query(x)
         v = self.value(x)
@@ -81,13 +80,11 @@ class MultiHeadAttention(nn.Module):
 
     def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        # TODO(day3): ModuleList of Head(head_size = n_embd // n_head); output proj Linear(n_embd, n_embd)
         self.heads = nn.ModuleList([Head(n_embd, n_embd // n_head, block_size, dropout) for i in range(n_head)])
         self.out_proj = nn.Linear(n_embd, n_embd)
 
-    def forward(self, x: torch.Tensor, past_kv=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, past_kv: list | None = None) -> tuple[torch.Tensor, list]:
         # concat head outputs on the channel dim, then project. (B,T,C) -> (B,T,C)
-        # TODO(day3)
         outputs = []
         new_caches = []
 
@@ -111,7 +108,6 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # TODO(day4)
         out = self.sequential(x)
         return out
 
@@ -130,7 +126,7 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(self.gptConfig.n_embd)
         self.ln2 = nn.LayerNorm(self.gptConfig.n_embd)
 
-    def forward(self, x: torch.Tensor, past_kv=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, past_kv: list | None = None) -> tuple[torch.Tensor, list]:
         attn_out, new_cache = self.attn(self.ln1(x), past_kv=past_kv)
 
         x = x + attn_out
@@ -149,7 +145,6 @@ class GPT(nn.Module):
     def __init__(self, cfg: GPTConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        # TODO(day5)
         self.t_embd = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.pos_embd = nn.Embedding(cfg.block_size, cfg.n_embd)
         self.stack = nn.Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
@@ -172,7 +167,6 @@ class GPT(nn.Module):
         self, idx: torch.Tensor, targets: torch.Tensor | None = None, past_kv=None
     ) -> tuple[torch.Tensor, torch.Tensor | None, list]:
         # idx: (B, T) -> logits: (B, T, vocab_size); loss: scalar cross-entropy or None
-        # TODO(day5)
         B, T = idx.shape
 
         if past_kv is None:
@@ -204,9 +198,3 @@ class GPT(nn.Module):
             loss = F.cross_entropy(flattened_logits, flattened_targets)
 
         return logits, loss, new_caches
-
-if __name__ == "__main__":
-    mha = MultiHeadAttention(n_embd=32, n_head=4, block_size=8, dropout=0.0)
-    x = torch.randn(2, 8, 32)
-    out = mha(x)
-    print(out.shape)

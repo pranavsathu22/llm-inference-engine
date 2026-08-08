@@ -66,7 +66,6 @@ def sample_next(logits: torch.Tensor, *, temperature: float = 1.0,
 def generate_naive(model, idx: torch.Tensor, max_new_tokens: int, **sample_kwargs) -> torch.Tensor:
     """Day 8 baseline — NO cache. Every step re-runs the model on the whole (growing)
     sequence, cropped to block_size. Slow on purpose; it's the correctness reference."""
-    # TODO(day8)
     for i in range(max_new_tokens):
         idx_cropped = idx[:, -model.cfg.block_size:]
         logits, _, _ = model(idx_cropped)

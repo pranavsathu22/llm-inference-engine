@@ -20,8 +20,13 @@ import torch
 
 
 def quantize_int8(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """x (fp) -> (q int8, scale, zero_point). Choose your grouping axis and document it."""
-    # TODO(day10)
+    """x (fp) -> (q int8, scale, zero_point).
+
+    Grouping axis: per-token -- min/max reduced over the last dim (head_size), keeping
+    B and T. One scale/zero_point per token, shared across that token's head_size
+    features. More resistant to outliers than per-tensor grouping (see tests/
+    test_quantize.py and the Day 10 devlog for the measured accuracy/memory tradeoffs).
+    """
     x_min = x.amin(dim=-1, keepdim=True)
     x_max = x.amax(dim=-1, keepdim=True)
     qmin, qmax = -128, 127
@@ -36,12 +41,10 @@ def quantize_int8(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Te
 
 def dequantize_int8(q: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor) -> torch.Tensor:
     """Inverse of quantize_int8 -> fp tensor approximating the original."""
-    # TODO(day10)
     return (q.to(torch.float32) - zero_point) * scale
 
 
 def tensor_bytes(*tensors: torch.Tensor) -> int:
     """Total real storage of these tensors: sum(t.numel() * t.element_size()). Use this
     to compare fp16 cache bytes vs (int8 q + scales + zero-points) bytes."""
-    # TODO(day10)
     return sum(t.numel() * t.element_size() for t in tensors)

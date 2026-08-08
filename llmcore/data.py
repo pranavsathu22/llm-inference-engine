@@ -12,14 +12,12 @@ import torch
 
 def load_tokens(path: str, tokenizer) -> torch.Tensor:
     """Read the corpus file, encode it, return a 1-D LongTensor of token ids."""
-    # TODO(day1)
     txt = open(path).read()
     return torch.tensor(tokenizer.encode(txt), dtype=torch.long)
 
 
 def train_val_split(data: torch.Tensor, frac: float = 0.9) -> tuple[torch.Tensor, torch.Tensor]:
     """Split the token stream into (train, val). Contiguous split, not shuffled."""
-    # TODO(day1)
     n = int(len(data) * frac)
     return (data[:n], data[n:])
 
@@ -34,7 +32,6 @@ def get_batch(
         y: (batch_size, block_size)   x shifted by one (the targets)
     Pick batch_size random start positions; each row is a window of length block_size.
     """
-    # TODO(day1)
     indices = torch.randint(0, len(data) - block_size, (batch_size,))
     x = []
     y = []

@@ -16,7 +16,6 @@ from . import data as d
 @torch.no_grad()
 def estimate_loss(model, data, block_size: int, batch_size: int, iters: int, device: str) -> float:
     """Average loss over `iters` random batches (model in eval mode)."""
-    # TODO(day6)
     model.eval()
     avg = float(0)
 
@@ -47,7 +46,6 @@ def train(
 
     Consider a short LR warmup. Save a checkpoint at the end (and maybe on best val).
     """
-    # TODO(day6-7)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     block_size = model.cfg.block_size
 
