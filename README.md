@@ -1,92 +1,43 @@
 # llmcore
 
-A small, from-scratch LLM inference engine. A decoder-only transformer implemented in
-PyTorch, plus the inference stack that makes generation fast and cheap: a KV cache,
-tunable sampling, and an int8-quantized KV cache. Each one measured, not asserted.
+A char-level GPT and the inference stack built on top of it: a KV cache, temperature/top-k/top-p
+sampling, and int8 KV-cache quantization.
 
-The model is the easy half. The point of this repo is the **systems layer on top of
-it**: how you go from a correct forward pass to fast, memory-efficient token
-generation, and how you *prove* each optimization is both faster and still correct.
+The transformer itself is the scaffolding. What I was actually after was the layer above it, where
+the interesting questions live. Does this optimization change the model's output? By how much does
+it actually help? Both of those turn out to be easy to get wrong, and I got both wrong at least
+once here before measuring properly.
 
-## Why it exists
+Three things came out of it that I didn't expect going in.
 
-Autoregressive generation recomputes attention over the whole prefix at every step
-unless you cache it. Caching trades memory for speed. Quantizing the cache trades a
-little accuracy for a lot of memory. This repo builds that stack from zero and
-benchmarks every rung:
+## 1. The cache is provably equivalent, not approximately equivalent
 
-- **Correctness.** The KV-cache path must produce *token-identical* output to the
-  full-recompute path (`tests/test_cache_equiv.py`). An optimization that changes the
-  answer isn't an optimization.
-- **Speed.** Tokens/sec, cached vs. uncached (`llmcore/bench.py`).
-- **Memory.** Measured KV-cache bytes, fp16 vs. int8.
+`generate_cached` and `generate_naive` produce token-identical output under greedy decoding. Not
+"close enough." Identical. `tests/test_cache_equiv.py` asserts it, and I verified the same property
+layer by layer during the build (split a sequence into prefill plus one-token-at-a-time decode,
+thread the cache through, compare against the all-at-once run: max difference `~1e-7`, which is
+float non-associativity and nothing else).
 
-## Layout
+The piece that made this work cleanly was the mask. Instead of branching on whether a cache exists,
+`Head` slices its causal mask by absolute position:
 
-```
-llmcore/
-  tokenizer.py   # text <-> token ids
-  data.py        # corpus -> batched (x, y) tensors
-  model.py       # Head -> MultiHeadAttention -> Block -> GPT
-  train.py       # training loop, checkpointing
-  generate.py    # sampling + the KV cache (the payoff)
-  quantize.py    # int8 KV cache + memory measurement
-  bench.py       # tokens/sec + memory benchmarks, plots
-tests/           # shape, causality, cache-equivalence, sampling, quantization tests
-scripts/         # data download
-plots/           # committed benchmark output (see Results)
-DEVLOG.md        # daily build log, dated, read this to see how it was actually built
+```python
+T_cached = k.shape[1] - q.shape[1]
+causal_mask = self.mask[T_cached : T_cached + T_new, :T_total]
 ```
 
-### Per-module notes
+One formula covers all three cases. No cache reduces to the original `[:T, :T]` slice. Single-token
+decode produces a row of all ones, which is correct because a new token is allowed to see its whole
+history. Prefill gets ordinary causal masking among the new tokens. `GPT.forward` derives the
+position offset from `past_kv`'s own shape rather than tracking it separately, so the two can't
+disagree.
 
-- **`tokenizer.py`.** Char-level `CharTokenizer`. The vocab is just the sorted set of
-  unique characters in the corpus, so it's language-agnostic (see `data.py`'s
-  docstring on swapping corpora).
-- **`data.py`.** `get_batch` samples random windows and shifts by one for next-token
-  targets. `load_tokens`/`train_val_split` are corpus-agnostic. Nothing here is
-  Shakespeare-specific.
-- **`model.py`.** `Head`'s causal mask uses an absolute-position slice
-  (`self.mask[T_cached:T_cached+T_new, :T_total]`), so one formula handles no-cache,
-  prefill, and cached decode without branching. That's the piece that makes
-  `Head`/`MultiHeadAttention`/`Block`/`GPT.forward` all cache-transparent. `GPT`
-  derives the KV-cache position offset from `past_kv`'s own shape instead of a
-  separately-tracked argument, so it can't drift out of sync.
-- **`train.py`.** Standard AdamW loop. `estimate_loss` always restores
-  `model.train()` before returning, even though it evaluates in `.eval()` mode.
-- **`generate.py`.** `generate_naive` is the deliberately slow correctness reference;
-  it recomputes everything every step. `generate_cached` prefills once, then decodes
-  one token at a time, feeding only the newest token each step (see DEVLOG.md for why
-  the whole growing sequence must never be re-fed once caching is in play).
-  `sample_next` composes temperature, top-k, and top-p filtering before the final
-  multinomial draw.
-- **`quantize.py`.** Per-token affine int8 quantization (`quantize_int8`/
-  `dequantize_int8`). The grouping axis and its accuracy/memory tradeoff vs.
-  per-channel grouping are documented in the module docstring. Not yet wired into
-  live generation; see Known limitations below.
-- **`bench.py`.** Every number here is measured, not projected: real wall-clock
-  timing (warmup + median of repeats) and real tensor byte counts, not theoretical
-  estimates.
+## 2. My first benchmark said caching made things slower. It was wrong.
 
-## Setup
+An early single-run timing check showed cached generation at `0.52x`, i.e. losing badly to the naive
+path. I nearly wrote that up as a real finding about Python overhead dominating at small scale.
 
-```bash
-python -m venv .venv && . .venv/bin/activate    # or .venv\Scripts\activate on Windows
-pip install -r requirements.txt
-python scripts/download_data.py                 # TinyShakespeare
-```
-
-## Results
-
-All numbers below are measured on the actual trained checkpoint (`n_embd=128,
-n_head=4, n_layer=4, block_size=64`, TinyShakespeare, 4000 training steps), not
-projected. Reproduce with `python -m llmcore.bench` from the repo root.
-
-### Training loss: TinyShakespeare, char-level GPT
-
-![Training loss: TinyShakespeare, char-level GPT](plots/loss_curve.png)
-
-### Generation speed: naive vs. KV cache
+It was noise. Once `bench.py` did a warmup pass and took a median of repeats, the result inverted:
 
 ![Generation speed: naive vs KV cache](plots/tokens_per_sec.png)
 
@@ -98,38 +49,73 @@ projected. Reproduce with `python -m llmcore.bench` from the repo root.
 | 48 | 369.1 | 716.5 | 1.94x |
 | 63 | 454.2 | 738.9 | 1.63x |
 
-Swept up to `block_size=64`; `generate_cached` can't exceed that (see Known
-limitations below). An earlier informal, single-run check with no warmup and no
-repeats showed cached losing. That was measurement noise, not a real result. See
-DEVLOG.md for why a proper benchmark methodology (warmup + median-of-repeats)
-matters, and what changed between the two measurements.
+Cached wins everywhere, `1.13x` to `1.94x`. The naive line is visibly the noisier one, which is the
+tell: it does more work per step, so it has more variance to hide in. Sweep capped at `block_size=64`
+for a reason covered under Limitations.
 
-### KV-cache memory: fp32 vs. fp16 vs. int8
+## 3. int8 does not give you 4x, and the gap is predictable
+
+The marketing number for int8 quantization is 4x smaller than fp32. The real number for this model
+is `3.2x`, and for fp16 it's `1.6x`:
 
 ![KV-cache memory: fp32 vs fp16 vs int8](plots/kv_cache_bytes.png)
 
-At this model's `head_size=32`: int8 is about 3.2x smaller than fp32, about 1.6x
-smaller than fp16. The ratio is constant at every sequence length, since the
-per-token quantization overhead (one `scale` and `zero_point` per token) doesn't
-grow with sequence length. Not the naive "int8 = 4x" claim; see DEVLOG.md for the
-`(group_size * 4) / (group_size + 8)` formula this follows and why smaller groups
-dilute the savings.
+The missing factor is the `scale` and `zero_point` stored alongside every group. Those stay float32,
+so with per-token grouping they cost a fixed 8 bytes per group no matter how small the group is.
+Sweeping group size from 8 to 2048 showed the ratio tracks `(group_size * 4) / (group_size + 8)`
+exactly, approaching 4x asymptotically and never arriving. At this model's `head_size=32` that lands
+on 3.2x. The ratio also stays flat across sequence length, since group size doesn't change as the
+cache grows.
 
-## Known limitations
+## Training
 
-Written down honestly rather than glossed over. Both are real properties of this
-implementation, not bugs, and both are the kind of thing a production system has to
-solve that this toy-scale project didn't need to.
+For completeness, the model this was all measured on. Char-level, `n_embd=128`, `n_head=4`,
+`n_layer=4`, `block_size=64`, 4000 steps on TinyShakespeare.
 
-- **`generate_cached` can't exceed `block_size` tokens.** Positional embeddings are a
-  fixed-size lookup table (`nn.Embedding(block_size, n_embd)`). `generate_naive`
-  avoids this by silently cropping old context every step, but `generate_cached` is
-  built to never forget anything, so it has nowhere to go once the position offset
-  exceeds `block_size`. Real systems solve this with relative or rotary position
-  encodings (RoPE) or a sliding-window cache eviction policy. Out of scope here.
-- **Quantization is measured but not deployed.** `quantize.py` is fully correct and
-  tested in isolation (round-trip error, memory savings), and `bench.py` uses it to
-  measure what a quantized cache would cost. But nothing in `generate_cached`'s
-  actual decode path calls `quantize_int8`/`dequantize_int8`. Wiring it in (store
-  quantized, dequantize just before the attention matmul) and measuring the resulting
-  perplexity/accuracy impact is the natural next step. Not done yet.
+![Training loss: TinyShakespeare, char-level GPT](plots/loss_curve.png)
+
+It generates recognizable words and picks up the script formatting (all-caps speaker names on their
+own line) without producing coherent English, which is about right for this size.
+
+## Running it
+
+```bash
+python -m venv .venv && . .venv/bin/activate    # .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python scripts/download_data.py                 # TinyShakespeare
+python -m pytest tests/ --ignore=tests/test_training.py   # 22 tests
+python -m llmcore.bench                         # regenerates every plot above
+```
+
+## Layout
+
+```
+llmcore/
+  model.py       # Head -> MultiHeadAttention -> Block -> GPT, all cache-transparent
+  generate.py    # generate_naive (reference) vs generate_cached, plus sample_next
+  quantize.py    # per-token affine int8, with the grouping tradeoff in the docstring
+  bench.py       # every number here is measured, not projected
+  train.py       # AdamW loop
+  tokenizer.py   # char-level, vocab is just the corpus's unique characters
+  data.py        # random windows, targets shifted by one
+tests/           # shapes, causality, cache equivalence, sampling, quantization
+DEVLOG.md        # dated build log with the bugs left in
+```
+
+`DEVLOG.md` is the honest version of how this went, including the things that broke. The
+backward-before-forward crash, the softmax normalizing over the wrong axis, the `sample_kwargs` that
+were silently discarded and made the cache look broken when it wasn't.
+
+## Limitations
+
+Two real ones, both consequences of choices I made rather than bugs.
+
+`generate_cached` can't exceed `block_size` tokens. Positional embeddings are a fixed lookup table,
+and the cached path never forgets anything, so it runs off the end of that table. `generate_naive`
+sidesteps this by silently cropping old context every step. The fixes are rotary embeddings or a
+sliding-window eviction policy, neither of which I built.
+
+Quantization is measured but not deployed. `quantize.py` is correct and tested in isolation, and
+`bench.py` uses it to measure what a quantized cache would cost, but nothing in the live decode path
+calls it. Wiring it in means storing quantized K/V and dequantizing right before the attention
+matmul, then measuring the perplexity hit. That's the obvious next thing.
